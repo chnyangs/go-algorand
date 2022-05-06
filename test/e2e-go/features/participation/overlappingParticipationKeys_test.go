@@ -19,6 +19,7 @@ package participation
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -128,13 +129,20 @@ func TestOverlappingParticipationKeys(t *testing.T) {
 func addParticipationKey(a *require.Assertions, fixture *fixtures.RestClientFixture, acctNum uint64, startRound, endRound uint64, regTransactions map[int]transactions.SignedTxn) (crypto.OneTimeSignatureVerifier, error) {
 	dataDir := fixture.NodeDataDirs()[acctNum]
 	nc := fixture.GetNodeControllerForDataDir(dataDir)
-	genesisDir, err := nc.GetGenesisDir()
+	//genesisDir, err := nc.GetGenesisDir()
 
 	partKeyName := filepath.Join(dataDir, config.PartKeyFilename("Wallet", startRound, endRound))
-	partKeyNameTarget := filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound))
-
+	//partKeyNameTarget := filepath.Join(genesisDir, config.PartKeyFilename("Wallet", startRound, endRound))
+	if _, err := os.Stat(partKeyName); errors.Is(err, os.ErrNotExist) {
+		// path/to/whatever does not exist
+		a.True(false)
+	}
 	// make the rename in the background to ensure it won't take too long. We have ~4 rounds to complete this.
-	go os.Rename(partKeyName, partKeyNameTarget)
+	//go os.Rename(partKeyName, partKeyNameTarget)
+
+	clientController := fixture.GetLibGoalClientFromNodeController(nc)
+	_, err := clientController.AddParticipationKey(partKeyName)
+	a.NoError(err)
 
 	signedTxn := regTransactions[int(startRound-2)]
 	a.NotEmpty(signedTxn.Sig)

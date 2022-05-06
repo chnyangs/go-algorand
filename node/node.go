@@ -404,7 +404,6 @@ func (node *AlgorandFullNode) Start() {
 // startMonitoringRoutines starts the internal monitoring routines used by the node.
 func (node *AlgorandFullNode) startMonitoringRoutines() {
 	node.monitoringRoutinesWaitGroup.Add(2)
-
 	go node.txPoolGaugeThread()
 	// Delete old participation keys
 	go node.oldKeyDeletionThread()
