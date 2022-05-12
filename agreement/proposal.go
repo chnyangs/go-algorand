@@ -18,6 +18,7 @@ package agreement
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
 	"time"
 
@@ -153,7 +154,14 @@ func deriveNewSeed(address basics.Address, vrf *crypto.VRFSecrets, rnd round, pe
 	}
 
 	if period == 0 {
-		seedProof, ok = vrf.SK.Prove(prevSeed)
+		var leavesHashArr [1024]*[sha256.Size]byte
+		for i, leave := range crypto.Leaves {
+			// Check two leaves have same parents
+			leaveHash32 := [32]byte{}
+			copy(leaveHash32[:], leave)
+			leavesHashArr[i] = &leaveHash32
+		}
+		seedProof, ok = vrf.SK.Prove(prevSeed, leavesHashArr[:], 1021, 13)
 		if !ok {
 			reterr = fmt.Errorf("could not make seed proof")
 			return
@@ -206,7 +214,15 @@ func verifyNewSeed(p unauthenticatedProposal, ledger LedgerReader) error {
 
 	if value.OriginalPeriod == 0 {
 		verifier := proposerRecord.SelectionID
-		ok, _ := verifier.Verify(p.SeedProof, prevSeed) // ignoring VrfOutput returned by Verify
+		//mu Hashable, leaveHashes [1024]*[32]byte, i int32, j int32, proof VrfProof
+		var leavesHashArr [1024]*[sha256.Size]byte
+		for i, leave := range crypto.Leaves {
+			// Check two leaves have same parents
+			leaveHash32 := [32]byte{}
+			copy(leaveHash32[:], leave)
+			leavesHashArr[i] = &leaveHash32
+		}
+		ok, _ := verifier.Verify(prevSeed, leavesHashArr[:], 1021, 13, p.SeedProof) // ignoring VrfOutput returned by Verify
 		if !ok {
 			return fmt.Errorf("payload seed proof malformed (%v, %v)", prevSeed, p.SeedProof)
 		}

@@ -17,6 +17,7 @@
 package committee
 
 import (
+	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"math/big"
@@ -74,7 +75,15 @@ type (
 // Otherwise, an error is returned.
 func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Membership) (res Credential, err error) {
 	selectionKey := m.Record.SelectionID
-	ok, vrfOut := selectionKey.Verify(cred.Proof, m.Selector)
+	//mu Hashable, leaveHashes [1024]*[DigestSize]byte, i, j int32, proof VrfProof, ap *Branch
+	var leavesHashArr [1024]*[sha256.Size]byte
+	for i, leave := range crypto.Leaves {
+		// Check two leaves have same parents
+		leaveHash32 := [32]byte{}
+		copy(leaveHash32[:], leave)
+		leavesHashArr[i] = &leaveHash32
+	}
+	ok, vrfOut := selectionKey.Verify(m.Selector, leavesHashArr[:], 1021, 13, cred.Proof)
 
 	hashable := hashableCredential{
 		RawOut: vrfOut,
@@ -124,7 +133,15 @@ func (cred UnauthenticatedCredential) Verify(proto config.ConsensusParams, m Mem
 
 // MakeCredential creates a new unauthenticated Credential given some selector.
 func MakeCredential(secrets *crypto.VrfPrivkey, sel Selector) UnauthenticatedCredential {
-	pf, ok := secrets.Prove(sel)
+	// leaveHashes []*[DigestSize]byte, i, j int32
+	var leavesHashArr [1024]*[sha256.Size]byte
+	for i, leave := range crypto.Leaves {
+		// Check two leaves have same parents
+		leaveHash32 := [32]byte{}
+		copy(leaveHash32[:], leave)
+		leavesHashArr[i] = &leaveHash32
+	}
+	pf, ok := secrets.Prove(sel, leavesHashArr[:], 1021, 13)
 	if !ok {
 		logging.Base().Error("Failed to construct a VRF proof -- participation key may be corrupt")
 		return UnauthenticatedCredential{}

@@ -30,12 +30,21 @@ package crypto
 // #include <stdint.h>
 // #include "sodium.h"
 import "C"
+import (
+	"bytes"
+	"encoding/hex"
+	"log"
+	"strconv"
+)
 
 func init() {
 	if C.sodium_init() == -1 {
 		panic("sodium_init() failed")
 	}
 }
+
+var Leaves = make([][]byte, 1024)
+var APath *Branch
 
 // deprecated names + wrappers -- TODO remove
 
@@ -83,10 +92,41 @@ func VrfKeygenFromSeed(seed [32]byte) (pub VrfPubkey, priv VrfPrivkey) {
 	return pub, priv
 }
 
+type PublicParameter struct {
+	T int32 `defaultN:"1024"`
+	N int32 `defaultT:"16"`
+}
+
 // VrfKeygen generates a random VRF keypair.
 func VrfKeygen() (pub VrfPubkey, priv VrfPrivkey) {
-	C.crypto_vrf_keypair((*C.uchar)(&pub[0]), (*C.uchar)(&priv[0]))
-	return pub, priv
+	// Add by Wayne
+	pp := &PublicParameter{N: 1024, T: 16}
+	r, _ := GenRandomBytes(64)
+	var i int32
+	var rootList [][]byte
+	var xi0 = make([][]byte, pp.N)
+	for i = 0; i < pp.N; i++ {
+		combinedDigest := CalculateHash(append(r, []byte(strconv.Itoa(int(i)))...))
+		xi0[i] = combinedDigest[:]
+	}
+	for i = 0; i < pp.N; i++ {
+		var jRoot = xi0[i]
+		var j int32
+		for j = 0; j < pp.T; j++ {
+			tmp := CalculateHash(jRoot[:])
+			jRoot = tmp[:]
+		}
+		rootList = append(rootList, jRoot[:])
+		Leaves[i] = jRoot
+	}
+	var intermediateHashes = make(map[int][][]byte)
+	pk := ComputeMerkleRoot(Leaves, intermediateHashes)
+	log.Println("Generated Merkle Root:", hex.EncodeToString(pk[:]))
+	sk := [64]byte{}
+	copy(sk[:], r)
+	return pk, sk
+	//C.crypto_vrf_keypair((*C.uchar)(&pub[0]), (*C.uchar)(&priv[0]))
+	//return pub, priv
 }
 
 // Pubkey returns the public key that corresponds to the given private key.
@@ -107,8 +147,32 @@ func (sk VrfPrivkey) proveBytes(msg []byte) (proof VrfProof, ok bool) {
 
 // Prove constructs a VRF Proof for a given Hashable.
 // ok will be false if the private key is malformed.
-func (sk VrfPrivkey) Prove(message Hashable) (proof VrfProof, ok bool) {
-	return sk.proveBytes(HashRep(message))
+//func (sk VrfPrivkey) Prove(message Hashable) (proof VrfProof, ok bool) {
+//	return sk.proveBytes(HashRep(message))
+//}
+
+type Branch struct {
+	NumLeaves uint32             // Number of leaves
+	Hashes    [][DigestSize]byte // Merkle branch
+	Flags     []byte             // Bitmap of merkle tree
+}
+
+func (sk VrfPrivkey) Prove(mu Hashable, leaveHashes []*[DigestSize]byte, i, j int32) (proof VrfProof, ok bool) {
+	rSk64 := [64]byte{}
+	copy(rSk64[:], sk[:])
+	xi0 := CalculateHash(append(rSk64[:], []byte(strconv.Itoa(int(i)))...))
+	var iter int32
+	for iter = 0; iter < (16 - 1 - j); iter++ {
+		xi0 = CalculateHash(xi0[:])
+	}
+	v := CalculateHash(append(xi0[:], HashRep(mu)...))
+	APath = CalculateAuthPath(leaveHashes, leaveHashes[i])
+	// return v, y, ap
+	appendProof := [64]byte{}
+	copy(appendProof[:], append(v[:], xi0[:]...))
+	copy(proof[:], appendProof[:])
+	return proof, true
+
 }
 
 // Hash converts a VRF proof to a VRF output without verifying the proof.
@@ -133,6 +197,35 @@ func (pk VrfPubkey) verifyBytes(proof VrfProof, msg []byte) (bool, VrfOutput) {
 // For a given public key and message, there are potentially multiple valid proofs.
 // However, given a public key and message, all valid proofs will yield the same output.
 // Moreover, the output is indistinguishable from random to anyone without the proof or the secret key.
-func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
-	return pk.verifyBytes(p, HashRep(message))
+//func (pk VrfPubkey) Verify(p VrfProof, message Hashable) (bool, VrfOutput) {
+//	return pk.verifyBytes(p, HashRep(message))
+//}
+func (pk VrfPubkey) Verify(mu Hashable, leaveHashes []*[DigestSize]byte, i, j int32, proof VrfProof) (bool, VrfOutput) {
+	v := proof[:DigestSize]
+	y := proof[DigestSize:64]
+	var out VrfOutput
+	newProof := CalculateHash(append(y, HashRep(mu)...))
+	if !bytes.Equal(v, newProof[:]) {
+		return false, out
+	}
+	var iter int32
+	for iter = 0; iter < j+1; iter++ {
+		newY := CalculateHash(y)
+		copy(y, newY[:])
+	}
+	yDigest := [DigestSize]byte{}
+	copy(yDigest[:], y)
+	apXit := CalculateAuthPath(leaveHashes[:], &yDigest)
+	merkleRoot1, _ := VerifyAuthPath(APath)
+	merkleRoot2, _ := VerifyAuthPath(apXit)
+	//m := (*C.uchar)(C.NULL)
+	//_ = C.crypto_vrf_verify((*C.uchar)(&out[0]), (*C.uchar)(&pk[0]), (*C.uchar)(&proof[0]), (*C.uchar)(m), (C.ulonglong)(len(HashRep(mu))))
+	log.Println("R1", merkleRoot1)
+	log.Println("R2", merkleRoot2)
+	log.Println("PK", pk)
+
+	if bytes.Equal(pk[:], merkleRoot1[:]) && bytes.Equal(pk[:], merkleRoot2[:]) {
+		return true, out
+	}
+	return false, out
 }

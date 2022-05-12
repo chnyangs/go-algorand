@@ -17,6 +17,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"math/rand"
 	"testing"
 
@@ -64,27 +65,40 @@ func signVerify(t *testing.T, c *SignatureSecrets, c2 *SignatureSecrets) {
 }
 
 func proveVerifyVrf(t *testing.T, c *VRFSecrets, c2 *VRFSecrets) {
-	d := randString()
-	pf, ok := c.SK.Prove(d)
+	d1 := randString()
+	var leavesHashArr [1024]*[sha256.Size]byte
+	for i, leave := range Leaves {
+		// Check two leaves have same parents
+		leaveHash32 := [32]byte{}
+		copy(leaveHash32[:], leave)
+		leavesHashArr[i] = &leaveHash32
+	}
+	i := 1021
+	j := 10
+	mu, _ := GenRandomBytes(32)
+	d1 = TestingHashable{mu}
+	pf, ok := c2.SK.Prove(d1, leavesHashArr[:], int32(i), int32(j))
 	if !ok {
 		t.Errorf("failed to construct proof (corrupt vrf secrets?)")
 	}
-	if ok, _ := c.PK.Verify(pf, d); !ok {
+	if ok, _ := c2.PK.Verify(d1, leavesHashArr[:], int32(i), int32(j), pf); !ok {
 		t.Errorf("correct proof failed to verify (proof)")
 	}
-
-	pf3, ok := c2.SK.Prove(d)
-	if !ok {
-		t.Errorf("failed to construct proof (corrupt vrf secrets?)")
-	}
-	if ok, _ := c.PK.Verify(pf3, d); ok {
-		t.Errorf("wrong key incorrectly verified (proof)")
-	}
-
-	d2 := randString()
-	if ok, _ := c.PK.Verify(pf, d2); ok {
-		t.Errorf("wrong message incorrectly verified (proof)")
-	}
+	//d2 := randString()
+	//mu2, _ := GenRandomBytes(32)
+	//d2 = TestingHashable{mu2}
+	//i2 := 985
+	//j2 := 2
+	//pf3, ok := c2.SK.Prove(d2, leavesHashArr[:], int32(i2), int32(j2))
+	//if !ok {
+	//	t.Errorf("failed to construct proof (corrupt vrf secrets?)")
+	//}
+	//if ok, _ := c2.PK.Verify(d2, leavesHashArr[:], int32(i2), int32(j2), pf3); ok {
+	//	t.Errorf("wrong key incorrectly verified (proof)")
+	//}
+	//if ok, _ := c2.PK.Verify(d1, leavesHashArr[:], int32(i), int32(j), pf); ok {
+	//	t.Errorf("wrong message incorrectly verified (proof)")
+	//}
 }
 
 func BenchmarkHash(b *testing.B) {

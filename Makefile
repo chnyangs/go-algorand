@@ -46,6 +46,11 @@ endif
 ifeq ($(UNAME), Linux)
 EXTLDFLAGS := -static-libstdc++ -static-libgcc
 ifeq ($(ARCH), amd64)
+
+ifeq ($(UNAME),Darwin)
+    export CPLUS_INCLUDE_PATH := $(shell brew --prefix)/include
+endif
+
 # the following predicate is abit misleading; it tests if we're not in centos.
 ifeq (,$(wildcard /etc/centos-release))
 EXTLDFLAGS  += -static

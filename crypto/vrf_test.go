@@ -18,7 +18,10 @@ package crypto
 
 import (
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
+	"fmt"
+	"log"
 	"testing"
 
 	"github.com/algorand/go-algorand/test/partitiontest"
@@ -99,13 +102,24 @@ func BenchmarkVrfVerify(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		var sk VrfPrivkey
 		pks[i], sk = VrfKeygen()
+		fmt.Println("BenchmarkVrfVerify")
 		strs[i] = make([]byte, 100)
 		_, err := rand.Read(strs[i])
 		if err != nil {
 			panic(err)
 		}
 		var ok bool
+		var leavesHashArr [1024]*[sha256.Size]byte
+		for j, leave := range Leaves {
+			// Check two leaves have same parents
+			leaveHash32 := [32]byte{}
+			copy(leaveHash32[:], leave)
+			leavesHashArr[j] = &leaveHash32
+		}
 		proofs[i], ok = sk.proveBytes(strs[i])
+
+		//proofs[i], ok = sk.Prove(randString(), leavesHashArr, 1023, 13)
+		log.Println(sk)
 		if !ok {
 			panic("Failed to construct VRF proof")
 		}
