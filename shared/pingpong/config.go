@@ -79,7 +79,7 @@ var DefaultConfig = PpConfig{
 	MinFee:          1000,
 	MaxAmt:          1000,
 	TxnPerSec:       200,
-	NumPartAccounts: 10,
+	NumPartAccounts: 20,
 	RunTime:         10 * time.Second,
 	RestTime:        1 * time.Hour, // Long default rest to avoid accidental DoS
 	RefreshTime:     10 * time.Second,
