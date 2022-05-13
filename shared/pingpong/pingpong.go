@@ -1067,7 +1067,7 @@ func (pps *WorkerState) constructTxn(from, to string, fee, amt, aidx uint64, cli
 		return
 	}
 	// adjust transaction duration for 5 rounds. That would prevent it from getting stuck in the transaction pool for too long.
-	txn.LastValid = txn.FirstValid + 5
+	txn.LastValid = txn.FirstValid + 10
 
 	// if cfg.MaxFee == 0, automatically adjust the fee amount to required min fee
 	if cfg.MaxFee == 0 {
