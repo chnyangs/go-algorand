@@ -81,7 +81,7 @@ var DefaultConfig = PpConfig{
 	TxnPerSec:       200,
 	NumPartAccounts: 2000,
 	RunTime:         10 * time.Second,
-	RestTime:        1 * time.Hour, // Long default rest to avoid accidental DoS
+	RestTime:        0, // Long default rest to avoid accidental DoS
 	RefreshTime:     10 * time.Second,
 	MinAccountFunds: 100000,
 	GroupSize:       1,
