@@ -608,6 +608,9 @@ func genAppProgram(numOps uint32, numHashes uint32, hashSize string, numGlobalKe
 }
 
 func waitForNextRoundOrSleep(client libgoal.Client, waitTime time.Duration) {
+	if waitTime == 500*time.Millisecond{
+		waitTime = 1000*time.Millisecond
+	}
 	status, err := client.Status()
 	if err == nil {
 		status, err = client.WaitForRound(status.LastRound)
